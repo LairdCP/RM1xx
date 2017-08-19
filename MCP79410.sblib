@@ -1,0 +1,474 @@
+// Port of Sensorian MCP79410_RTCC Driver to smartbasic
+// source: https://github.com/sensorian/sensorian-firmware
+
+#define  MCP79410_ADDRESS	0x6f
+//************************* RTCC Memory map ****************************//
+
+#define  EEPROM_WRITE 0xae       //  DEVICE ADDR for EEPROM (writes)   
+#define  EEPROM_READ  0xaf       //  DEVICE ADDR for EEPROM (reads)  
+#define  RTCC_WRITE   0xde       //  DEVICE ADDR for RTCC MCHP  (writes) 
+#define  RTCC_READ    0xdf       //  DEVICE ADDR for RTCC MCHP  (reads)
+
+#define  SRAM_PTR     0x20       //  pointer of the SRAM area (RTCC) 
+#define  EEPROM_SR    0xff       //  STATUS REGISTER in the  EEPROM
+
+#define  SEC          0x00       //  address of SECONDS      register 
+#define  MIN          0x01       //  address of MINUTES      register 
+#define  HOUR         0x02       //  address of HOURS        register 
+#define  DAY          0x03       //  address of DAY OF WK    register 
+#define  STAT         0x03       //  address of STATUS       register 
+#define  DATE         0x04       //  address of DATE         register  
+#define  MNTH         0x05       //  address of MONTH        register 
+#define  YEAR         0x06       //  address of YEAR         register 
+#define  CTRL         0x07       //  address of CONTROL      register 
+#define  CAL          0x08       //  address of CALIB        register 
+#define  ULID         0x09       //  address of UNLOCK ID    register
+
+#define  ALM0SEC      0x0a       //  address of ALARM0 SEC   register 
+#define  ALM0MIN      0x0b       //  address of ALARM0 MIN   register 
+#define  ALM0HR       0x0c       //  address of ALARM0 HOUR  register 
+#define  ALM0WDAY     0x0d       //  address of ALARM0 CONTR register
+#define  ALM0DATE     0x0e       //  address of ALARM0 DATE  register 
+#define  ALM0MTH      0x0f       //  address of ALARM0 MONTH register
+
+#define  ALM1SEC      0x11       //  address of ALARM1 SEC   register 
+#define  ALM1MIN      0x12       //  address of ALARM1 MIN   register 
+#define  ALM1HR       0x13       //  address of ALARM1 HOUR  register 
+#define  ALM1WDAY     0x14       //  address of ALARM1 CONTR register
+#define  ALM1DATE     0x15       //  address of ALARM1 DATE  register 
+#define  ALM1MTH      0x16       //  address of ALARM1 MONTH register
+
+#define  PWRDNMIN     0x18       //  address of T_SAVER MIN(VDD->BAT)
+#define  PWRDNHOUR    0x19       //  address of T_SAVER HR (VDD->BAT) 
+#define  PWRDNDATE    0x1a       //  address of T_SAVER DAT(VDD->BAT) 
+#define  PWRDNMTH     0x1b       //  address of T_SAVER MTH(VDD->BAT)
+
+#define  PWRUPMIN     0x1c       //  address of T_SAVER MIN(BAT->VDD)
+#define  PWRUPHOUR    0x1d       //  address of T_SAVER HR (BAT->VDD) 
+#define  PWRUPDATE    0x1e       //  address of T_SAVER DAT(BAT->VDD) 
+#define  PWRUPMTH     0x1f       //  address of T_SAVER MTH(BAT->VDD)
+
+//************************GLOBAL CONSTANTS RTCC - INITIALIZATION****************//
+
+#define  PM                0x20       //  post-meridian bit (HOUR)
+#define  HOUR_FORMAT       0x40       //  Hour format
+#define  OUT_PIN           0x80       //  = b7 (CTRL)
+#define  SQWEN             0x40       //  SQWE = b6 (CTRL)
+#define  ALM_NO            0x00       //  no alarm activated        (CTRL)
+#define  ALM_0             0x10       //  ALARM0 is       activated (CTRL)
+#define  ALM_1             0x20       //  ALARM1 is       activated (CTRL)
+#define  ALM_01            0x30       //  both alarms are activated (CTRL)
+#define  MFP_01H           0x00       //  MFP = SQVAW(01 HERZ)      (CTRL)
+#define  MFP_04K           0x01       //  MFP = SQVAW(04 KHZ)       (CTRL)
+#define  MFP_08K           0x02       //  MFP = SQVAW(08 KHZ)       (CTRL)
+#define  MFP_32K           0x03       //  MFP = SQVAW(32 KHZ)       (CTRL)
+#define  MFP_64H           0x04       //  MFP = SQVAW(64 HERZ)      (CTRL)
+#define  EXTOSC            0x08       //  MFP = SQVAW(64 HERZ)      (CTRL)
+#define  ALMx_POL          0x80       //  polarity of MFP on alarm  (ALMxCTL)
+#define  ALMxC_SEC         0x00       //  ALARM compare on SEC      (ALMxCTL)
+#define  ALMxC_MIN         0x10       //  ALARM compare on MIN      (ALMxCTL)
+#define  ALMxC_HR          0x20       //  ALARM compare on HOUR     (ALMxCTL)
+#define  ALMxC_DAY         0x30       //  ALARM compare on DAY      (ALMxCTL)
+#define  ALMxC_DAT         0x40       //  ALARM compare on DATE     (ALMxCTL)
+#define  ALMxC_ALL         0x70       //  ALARM compare on all param(ALMxCTL)
+#define  ALMx_IF           0x08       //  MASK of the ALARM_IF      (ALMxCTL)
+
+
+#define  OSCRUN            0x20       //  state of the oscillator(running or not)
+#define  PWRFAIL           0x10
+#define  VBATEN            0x08       //  enable battery for back-up
+#define  VBAT_DIS          0x37       //  disable battery back-up
+
+#define  START_32KHZ       0x80       //  start crystal: ST = b7 (SEC)
+#define  LP                0x20       //  mask for the leap year bit(MONTH REG)
+#define  HOUR_12           0x40       //  12 hours format   (HOUR)
+
+#define  LPYR              0x20
+
+//********************************************************************************//
+#define ALM1MSK2           0x40
+#define ALM1MSK1           0x20
+#define ALM1MSK0           0x10
+
+#define ALM0MSK2           0x40
+#define ALM0MSK1           0x20
+#define ALM0MSK0           0x10
+//*********************************************************************************//
+
+DIM MCP79410_rc, MCP79410_I2Ch                                                   
+DIM MCP79410_I2CSpeed : MCP79410_I2CSpeed = 100000
+
+SUB MCP79410_Write(rtcc_reg, time_var)
+	MCP79410_rc=I2cOpen(MCP79410_I2CSpeed,0,MCP79410_I2Ch)
+		MCP79410_rc = I2cWriteReg8(MCP79410_ADDRESS, rtcc_reg,time_var)
+	I2cClose(MCP79410_I2Ch)
+ENDSUB
+
+FUNCTION  MCP79410_Read(rtcc_reg)
+	MCP79410_rc=I2cOpen(MCP79410_I2CSpeed,0,MCP79410_I2Ch)
+		Dim value
+		MCP79410_rc = I2cReadReg8(MCP79410_ADDRESS, rtcc_reg, value)
+	I2cClose(MCP79410_I2Ch)	
+ENDFUNC value
+
+FUNCTION MCP79410_bcd2dec(byVal val)
+	val = ((val/16) * 10) + (val % 16)
+endfunc val
+
+FUNCTION MCP79410_dec2bcd(byVal val)	
+	 val = ((val/10)*16) + (val % 10)
+ENDFUNC val
+
+SUB MCP79410_EnableOscillator()
+	DIM ST_bit : ST_bit = MCP79410_Read(DAY)      				//Read day + OSCON bit
+	ST_bit = ST_bit | START_32KHZ
+	MCP79410_Write(SEC,ST_bit)									//START bit is located in the Sec register
+ENDSUB
+
+SUB MCP79410_DisableOscillator()
+	DIM ST_bit : ST_bit = MCP79410_Read(DAY)      				//Read day + OSCON bit
+	ST_bit = ST_bit & ~START_32KHZ
+	MCP79410_Write(SEC,ST_bit)									//START bit is located in the Sec regist
+ENDSUB
+
+SUB MCP79410_SetHourFormat(format)
+	MCP79410_DisableOscillator()								//Diable clock
+	DIM Format_bit : Format_bit = MCP79410_Read(HOUR) 			//Read hour format bit	
+	IF (format == 0) THEN
+		Format_bit = Format_bit & ~HOUR_FORMAT					//Set format to H12 (military) 
+	ELSE
+		Format_bit = Format_bit | HOUR_FORMAT					//Set format to H12
+	ENDIF	
+	MCP79410_Write(HOUR,Format_bit)								//START bit is located in the Sec register
+	MCP79410_EnableOscillator()									//Enable clock
+ENDSUB
+
+FUNCTION MCP79410_IsRunning()
+
+	DIM mask : mask = MCP79410_Read(DAY)
+	
+	IF ((mask & OSCRUN) == OSCRUN) THEN             			//If oscillator = already running, do nothing.
+		EXITFUNC 1
+	ENDIF
+	
+ENDFUNC 0
+
+SUB MCP79410_GetTime(ByRef tsec,ByRef tmin,ByRef thour,ByRef tweekday,ByRef tdate,ByRef tmonth,ByRef tyear)
+
+    tsec = 			MCP79410_bcd2dec( MCP79410_Read(SEC) & (~START_32KHZ))
+	tmin = 			MCP79410_bcd2dec( MCP79410_Read(MIN))  
+	DIM hour_t : 	hour_t = MCP79410_Read(HOUR)
+
+	IF ((hour_t & HOUR_12) == HOUR_12) THEN //hour is in 24 hour format
+		hour_t = (hour_t & 0x1F) 
+	ELSE
+		hour_t = (hour_t & 0x3F)
+	ENDIF
+	
+	thour = 		MCP79410_bcd2dec(hour_t)
+	tweekday = 		MCP79410_bcd2dec( MCP79410_Read(DAY) & ~(OSCRUN|PWRFAIL|VBATEN))
+    tdate = 		MCP79410_bcd2dec( MCP79410_Read(DATE)) 
+	tmonth = 		MCP79410_bcd2dec( MCP79410_Read(MNTH) & ~(LPYR))   
+	tyear = 		MCP79410_bcd2dec( MCP79410_Read(YEAR)) 
+	
+ENDSUB
+
+SUB MCP79410_SetTime(tsec,tmin,thour,tweekday,tdate,tmonth,tyear)
+
+	DIM sec 	: sec = MCP79410_Read(SEC)						//Seconds
+	DIM mini 	: mini = 0										//Minutes
+	DIM hour 	: hour = MCP79410_Read(HOUR)					//Hours
+	DIM weekday : weekday = MCP79410_Read(DAY)					//Weekday
+	DIM date 	: date = 0										//Date
+	DIM month 	: month = MCP79410_Read(MNTH)					//Month
+	DIM year 	: year = 0										//Year
+		
+	IF ((sec & START_32KHZ) == START_32KHZ) THEN				//Seconds register
+
+		sec = MCP79410_dec2bcd(tsec)| START_32KHZ
+	ELSE
+		sec = MCP79410_dec2bcd(tsec)
+	ENDIF
+	
+	mini = MCP79410_dec2bcd(tmin)								//Minutes
+	
+	IF (( hour & HOUR_12) ==  HOUR_12) THEN						//Hour register
+		hour = MCP79410_dec2bcd(thour) | HOUR_12
+	ELSE
+		hour = MCP79410_dec2bcd(thour)
+	ENDIF
+	
+	IF (( hour & PM) ==  PM) THEN
+		hour = hour | PM
+	ENDIF
+	
+	weekday = weekday & 0x38									//Mask 3 upper bits
+	weekday = weekday | MCP79410_dec2bcd(tweekday) 				//Weekday
+	
+	date =  MCP79410_dec2bcd(tdate)								//Date
+	
+	IF ((month & LPYR) == LPYR) THEN							//Month 
+		month = MCP79410_dec2bcd(tmonth) | LPYR
+	ELSE
+		month = MCP79410_dec2bcd(tmonth)
+	ENDIF
+	
+	year = MCP79410_dec2bcd(tyear)								//Year
+	
+    MCP79410_Write(SEC,sec)
+	MCP79410_Write(MIN,mini)    
+	MCP79410_Write(HOUR,hour)
+	MCP79410_Write(DAY,weekday)
+    MCP79410_Write(DATE,date)  
+    MCP79410_Write(MNTH,month)    
+	MCP79410_Write(YEAR,year)
+	
+ENDSUB
+
+SUB MCP79410_SetPMAM(meridian)
+	MCP79410_DisableOscillator()								//Diable clock
+	DIM PMAM_bit : PMAM_bit = MCP79410_Read(HOUR)   			//Read meridian bit	
+	if (meridian == 0) THEN
+		PMAM_bit = PMAM_bit & ~PM								//Set AM
+	ELSE
+		PMAM_bit = PMAM_bit | PM								//Set PM
+	ENDIF	
+	MCP79410_Write(HOUR,PMAM_bit)								//Update PM/AM meridian bit
+	MCP79410_EnableOscillator()									//Enable clock
+ENDSUB
+
+SUB MCP79410_EnableAlarm(alarm)
+	DIM ctrl_bits : ctrl_bits = MCP79410_Read(CTRL)
+	IF (alarm == 0) THEN	
+		ctrl_bits = ctrl_bits | ALM_0
+		MCP79410_Write(CTRL,ctrl_bits)
+	ELSE
+		ctrl_bits = ctrl_bits | ALM_1
+		MCP79410_Write(CTRL,ctrl_bits)
+	ENDIF
+ENDSUB
+
+SUB MCP79410_EnableExOs()
+	DIM ctrl_bits : ctrl_bits = MCP79410_Read(CTRL)
+	ctrl_bits = ctrl_bits | EXTOSC
+	MCP79410_Write(CTRL,ctrl_bits)
+ENDSUB
+
+SUB MCP79410_DisableExOs()
+	DIM ctrl_bits : ctrl_bits = MCP79410_Read(CTRL)
+	ctrl_bits = ctrl_bits & ~EXTOSC
+	MCP79410_Write(CTRL,ctrl_bits)
+ENDSUB
+
+SUB	MCP79410_DisableAlarm(alarm)
+	DIM ctrl_bits : ctrl_bits = MCP79410_Read(CTRL)
+	IF (alarm == 0) THEN	
+		ctrl_bits = ctrl_bits & ~ALM_0
+		MCP79410_Write(CTRL,ctrl_bits)
+	ELSE
+		ctrl_bits = ctrl_bits & ~ALM_1
+		MCP79410_Write(CTRL,ctrl_bits)
+	ENDIF
+ENDSUB
+
+FUNCTION MCP79410_GetAlarmStatus(alarm)
+	DIM temp    
+	if(alarm == 0) THEN
+		temp = MCP79410_Read(ALM0WDAY)							//Read WKDAY register for ALRAM 0  
+	ELSE
+		temp = MCP79410_Read(ALM1WDAY)							//Read WKDAY register for ALRAM 1
+	ENDIF
+	IF ((temp & ALMx_IF) == ALMx_IF) THEN 
+		EXITFUNC 1
+	ENDIF
+ENDFUNC 0
+
+SUB MCP79410_ClearInterruptFlag(alarm)
+	DIM temp     
+	if (alarm == 0) THEN
+		temp = MCP79410_Read(ALM0WDAY)			//Read WKDAY register for ALRAM 0   
+		temp = temp & (~ALMx_IF)						//Clear 4-th bit 
+		MCP79410_Write(ALM0WDAY,temp)			//Enable backup battery mode
+	ELSE
+		temp = MCP79410_Read(ALM1WDAY)			//Read WKDAY register for ALRAM 1
+		temp = temp & (~ALMx_IF)						//Clear 4-th bit
+		MCP79410_Write(ALM1WDAY,temp)			//Enable backup battery mode
+	ENDIF
+ENDSUB
+
+SUB MCP79410_SetAlarmTime(tsec,tmin,thour,tweekday,tdate,tmonth, alarm)
+	DIM sec 	: sec = MCP79410_dec2bcd(tsec)
+	DIM mini 	: mini =  MCP79410_dec2bcd(tmin)
+	DIM hour 	: hour =  MCP79410_dec2bcd(thour)
+	DIM weekday : weekday = MCP79410_dec2bcd(tweekday)
+	DIM date 	: date =  MCP79410_dec2bcd(tdate)
+	DIM month 	: month =  MCP79410_dec2bcd(tmonth)
+		
+	IF (alarm == 0) THEN
+		MCP79410_Write(ALM0SEC,sec|START_32KHZ)
+		MCP79410_Write(ALM0MIN,mini)    
+		MCP79410_Write(ALM0HR,hour) 
+		MCP79410_Write(ALM0WDAY,weekday)
+		MCP79410_Write(ALM0DATE,date)    
+		MCP79410_Write(ALM0MTH,month)  
+	ELSE
+		MCP79410_Write(ALM1SEC,sec|START_32KHZ)
+		MCP79410_Write(ALM1MIN,mini)   
+		MCP79410_Write(ALM1HR,hour) 
+		MCP79410_Write(ALM1WDAY,weekday)
+		MCP79410_Write(ALM1DATE,date)   
+		MCP79410_Write(ALM1MTH,month)
+	ENDIF
+ENDSUB
+
+SUB MCP79410_SetAlarmMFPPolarity(MFP_pol,alarm)
+
+	DIM Polarity_bit : Polarity_bit = 0
+	
+	IF (alarm == 0) THEN	
+		Polarity_bit = MCP79410_Read(ALM0WDAY)      				//Read hour format bit	
+	ELSE
+		Polarity_bit = MCP79410_Read(ALM1WDAY)      				//Read hour format bit	
+	ENDIF
+	
+	IF (MFP_pol == 0) THEN
+		Polarity_bit = Polarity_bit & ~ALMx_POL						//Set MFP LOW
+	ELSE
+		Polarity_bit = Polarity_bit | ALMx_POL						//Set MFP HIGH
+	ENDIF	
+	
+	if (alarm == 0) THEN
+		MCP79410_Write(ALM0WDAY,Polarity_bit)						//Update polarity bit for Alarm 0
+	ELSE
+		MCP79410_Write(ALM1WDAY,Polarity_bit)						//Update polarity bit for Alarm 1
+	ENDIF
+	
+ENDSUB
+
+SUB MCP79410_SetAlarmMatch(match, alarm)
+	
+	DIM AlarmRegister : AlarmRegister = 0
+	IF (alarm == 0) THEN
+		AlarmRegister = ALM0WDAY
+	ELSE
+		AlarmRegister = ALM1WDAY
+	ENDIF
+	
+	DIM match_bits : match_bits = MCP79410_Read(AlarmRegister)
+
+	SELECT match
+		case 0 
+			match_bits = match_bits & ~(ALM0MSK2|ALM0MSK1|ALM0MSK0)
+			MCP79410_Write(AlarmRegister,match_bits)				//Minutes match
+		case 1 
+			match_bits = match_bits | ALM0MSK0
+			MCP79410_Write(AlarmRegister,match_bits)				//Minutes match
+		case 2 
+			match_bits = match_bits | ALM0MSK1
+			MCP79410_Write(AlarmRegister,match_bits)				//Hours match
+		case 3 
+			match_bits = match_bits | (ALM0MSK1|ALM0MSK0)
+			MCP79410_Write(AlarmRegister,match_bits)				//Day of week match
+		case 4 
+			match_bits = ALM0MSK2
+			MCP79410_Write(AlarmRegister,match_bits)				//Date match
+		case 5 
+			match_bits = match_bits | (ALM0MSK2|ALM0MSK1|ALM0MSK0)
+			MCP79410_Write(AlarmRegister,match_bits)				//Sec, Minutes Hours, Date match
+		CASE ELSE
+			match_bits = match_bits | ALM0MSK0
+			MCP79410_Write(AlarmRegister,match_bits)				//Minutes match
+	ENDSELECT
+	
+ENDSUB
+
+SUB MCP79410_SetMFP_Functionality(mode)
+	
+	DIM MFP_bits : MFP_bits = MCP79410_Read(CTRL)
+	
+	SELECT mode
+		case 0	//For GPO clear SQWEN, ALM0EN, ALM1EN
+			MFP_bits = MFP_bits & ~(SQWEN|ALM_0|ALM_1)
+			MCP79410_Write(CTRL,MFP_bits)	
+		case 1 	//For ALARM Interrupts clear SQWEN and set either ALM0EN or ALM1EN
+			MFP_bits = MFP_bits & SQWEN
+			MFP_bits = MFP_bits | ALM_0
+			MCP79410_Write(CTRL,MFP_bits)		
+		case 2	//For SQUARE WAVE set SQWEN 
+			MFP_bits = MFP_bits & ~(ALM_0|ALM_1)
+			MFP_bits = MFP_bits | SQWEN
+			MCP79410_Write(CTRL,MFP_bits)		
+		CASE ELSE //ALARM Interrupts 
+			MFP_bits = MFP_bits & SQWEN
+			MFP_bits = MFP_bits | ALM_0
+			MCP79410_Write(CTRL,MFP_bits)
+	ENDSELECT
+	
+ENDSUB
+
+SUB MCP79410_SetMFP_GPOStatus(status)
+	DIM gpo_bit : gpo_bit = MCP79410_Read(CTRL)							//General Purpose Output mode only available when (SQWEN = 0, ALM0EN = 0, and ALM1EN = 0):
+	IF (status == 0) THEN
+		gpo_bit = OUT_PIN												//MFP signal level is logic low
+		MCP79410_Write(CTRL,gpo_bit)
+	ELSE																//MFP signal level is logic high
+		gpo_bit = gpo_bit | OUT_PIN
+		MCP79410_Write(CTRL,gpo_bit)
+	ENDIF
+ENDSUB
+
+FUNCTION MCP79410_CheckPowerFailure()
+
+	DIM PowerFailure_bit : PowerFailure_bit = MCP79410_Read(DAY)      	//Read meridian bit	
+	DIM PowerFail
+	
+	IF ((PowerFailure_bit & PWRFAIL) == PWRFAIL) THEN
+		PowerFail = 1
+	ELSE
+		PowerFail = 0
+	ENDIF
+	PowerFailure_bit = PowerFailure_bit & ~PWRFAIL		        		//Clear Power failure bit
+	MCP79410_Write(DAY,PowerFailure_bit)								//Update PM/AM meridian bit
+
+ENDFUNC PowerFail
+
+FUNCTION MCP79410_IsVbatEnabled()
+	DIM temp: temp = MCP79410_Read(DAY)									//The 3rd bit of the RTCC_RTCC day register controls VBATEN   
+	IF ((temp & VBATEN) == VBATEN) THEN
+		EXITFUNC 1
+	ENDIF
+ENDFUNC 0
+
+SUB MCP79410_EnableVbat()
+	DIM temp : temp = MCP79410_Read(DAY)								//The 3rd bit of the RTCC_RTCC day register controls VBATEN   
+    temp = (temp | VBATEN)												//Set 3rd bit to enable backup battery mode
+    MCP79410_Write(DAY,temp)											//Enable backup battery mode
+ENDSUB
+
+SUB MCP79410_DisableVbat()
+	DIM temp : temp = MCP79410_Read(DAY)								//The 3rd bit of the RTCC_RTCC day register controls VBATEN   
+    temp = (temp & VBAT_DIS)											//Clear 3rd bit to disable backup battery mode
+    MCP79410_Write(DAY,temp)											//Enable backup battery mode	
+ENDSUB
+
+SUB MCP79410_GetPowerUpTime(ByRef tmin,ByRef thour,ByRef tdate,ByRef tmonth)
+	tmin = 		MCP79410_bcd2dec( MCP79410_Read(PWRUPMIN))  
+	thour = 	MCP79410_bcd2dec( MCP79410_Read(PWRUPHOUR)) 
+    tdate = 	MCP79410_bcd2dec( MCP79410_Read(PWRUPDATE))    
+    tmonth = 	MCP79410_bcd2dec( MCP79410_Read(PWRUPMTH))   	
+ENDSUB
+
+SUB MCP79410_GetPowerDownTime(ByRef tmin,ByRef thour,ByRef tdate,ByRef tmonth)
+	tmin = 		MCP79410_bcd2dec( MCP79410_Read(PWRDNMIN))    
+	thour = 	MCP79410_bcd2dec( MCP79410_Read(PWRDNHOUR)) 
+    tdate = 	MCP79410_bcd2dec( MCP79410_Read(PWRDNDATE))    
+    tmonth = 	MCP79410_bcd2dec( MCP79410_Read(PWRDNMTH))   
+ENDSUB
+
+SUB MCP79410_Initialize()
+	MCP79410_SetHourFormat(0)	//Set hour format to military time standard
+	MCP79410_DisableExOs()
+	MCP79410_EnableVbat()												//Enable battery backup
+	MCP79410_SetTime(17, 46, 8, 6, 7, 3, 15)	
+	MCP79410_EnableOscillator()											//Start clock by enabling oscillator
+ENDSUB
