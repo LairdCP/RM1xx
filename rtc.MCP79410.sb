@@ -1,0 +1,56 @@
+#include "MCP79410.sblib"
+#define AlarmPin 4
+
+Dim gpiostate, rc
+Dim tsec, tmin, thour, tweekday, tdate, tmonth, tyear
+
+tsec = 0
+tmin = 0 
+thour = 0
+tweekday = 0
+tdate = 0
+tmonth = 0 
+tyear = 0
+
+FUNCTION HandlerUartRx() as integer
+//exit application
+ENDFUNC 0
+
+FUNCTION GeneralTimerTick()
+
+	// Pass in the varibles to be set with the new date time data
+	MCP79410_GetTime(tsec,tmin,thour,tweekday,tdate,tmonth,tyear)
+	gpiostate = gpioread(AlarmPin) 
+	print gpiostate; "\n"
+	
+	if gpiostate == 0 then
+		MCP79410_ClearInterruptFlag(0)
+	endif
+	
+	print tdate; "/"; tmonth; "/"; tyear; " "; thour; ":"; tmin; ":"; tsec; "\n"
+	
+ENDFUNC 1	
+
+FUNCTION StartUp()
+	MCP79410_Initialize()
+	// Set the time
+	MCP79410_SetTime(45, 59, 23, 6, 19, 8, 17)
+	// Set the alrm pin 
+	rc = GpioSetFunc(AlarmPin,1,2)
+	//Set alarm time	
+	MCP79410_SetAlarmTime(0,1,0,0,0,0,0)				
+	MCP79410_SetAlarmMatch(0,0)
+	//Configure Alarm pin polarity as HIGH
+	MCP79410_SetAlarmMFPPolarity(0,0)			
+	MCP79410_SetMFP_Functionality(1)
+
+ENDFUNC
+
+ONEVENT EVUARTRX 					CALL HandlerUartRx
+ONEVENT EVTMR0 						CALL GeneralTimerTick	
+
+StartUp()	
+	
+TimerStart(0,1000,1)
+
+WAITEVENT
