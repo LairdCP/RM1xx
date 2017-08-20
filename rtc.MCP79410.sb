@@ -44,12 +44,12 @@ FUNCTION StartUp()
 	MCP79410_SetAlarmMFPPolarity(0,0)			
 	MCP79410_SetMFP_Functionality(1)
 
-ENDFUNC
+ENDFUNC 0
 
 ONEVENT EVUARTRX 					CALL HandlerUartRx
 ONEVENT EVTMR0 						CALL GeneralTimerTick	
 
-StartUp()	
+rc = StartUp()	
 	
 TimerStart(0,1000,1)
 
