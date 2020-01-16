@@ -88,6 +88,7 @@ FUNCTION LoramacJoined() As Integer
     joined = 1
     //Get current channel list
     GetChannelsList()
+    packettype = 1
 endfunc 1
 
 //-------------------------------------------------------------------------

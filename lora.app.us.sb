@@ -75,6 +75,7 @@ endfunc 1
 FUNCTION LoramacJoined() As Integer
     print "\nSuccessfully Joined network"
     joined = 1
+    packettype = 1
 endfunc 1
 
 //-------------------------------------------------------------------------
